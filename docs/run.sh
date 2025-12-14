@@ -344,6 +344,7 @@ download() {
     set +e
     curl -sSfL "$_url" -o "$_dst"
     _code="$?"
+    # shellcheck disable=SC2001
     set "-$(echo "$_orig_flags" | sed s/s//g)"
     if [ $_code -eq 0 ]; then
       unset _url _dst _code _orig_flags
@@ -362,6 +363,7 @@ download() {
     set +e
     wget -q -O "$_dst" "$_url"
     _code="$?"
+    # shellcheck disable=SC2001
     set "-$(echo "$_orig_flags" | sed s/s//g)"
     if [ $_code -eq 0 ]; then
       unset _url _dst _code _orig_flags
@@ -380,6 +382,7 @@ download() {
     set +e
     ftp -o "$_dst" "$_url"
     _code="$?"
+    # shellcheck disable=SC2001
     set "-$(echo "$_orig_flags" | sed s/s//g)"
     if [ $_code -eq 0 ]; then
       unset _url _dst _code _orig_flags
@@ -408,6 +411,7 @@ indent() {
     "$@" 2>&1
     echo "$?" >"$_ecfile"
   } | sed 's/^/       /'
+  # shellcheck disable=SC2001
   set "-$(echo "$_orig_flags" | sed s/s//g)"
   _ec="$(cat "$_ecfile")"
   rm -f "$_ecfile"
