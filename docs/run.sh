@@ -447,6 +447,4 @@ info_start() {
 
 # END: libsh.sh
 
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  main "$@" || exit 99
-fi
+main "$@" || exit 99

@@ -17,7 +17,7 @@ This program needs to run in a shell on the CachyOS live ISO environment as the
 root user, allowing it to run `pacman` commands etc.
 
 ```sh
-curl -sSf https://fnichol.github.io/cachyos-zfs-installer/run.sh | sudo -E sh -s --
+curl -sSf https://fnichol.github.io/cachyos-zfs-installer/run.sh | sudo -E bash -s --
 ```
 
 ### `install`
