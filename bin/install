@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+
+print_usage() {
+  local program="$1"
+  local version="$2"
+  local author="$3"
+
+  cat <<-EOF
+	$program $version
+
+	CachyOS ZFS installer.
+
+	USAGE:
+	    $program [FLAGS]
+
+	FLAGS:
+	    -h, --help        Prints help information
+	    -V, --version     Prints version information
+
+	AUTHOR:
+	    $author
+	EOF
+}
+
+main() {
+  set -euo pipefail
+  if [[ -n "${DEBUG:-}" ]]; then set -x; fi
+  if [[ -n "${TRACE:-}" ]]; then set -xv; fi
+
+  # shellcheck source=vendor/lib/libsh.full.sh
+  . "${0%/*}/../vendor/lib/libsh.full.sh"
+
+  setup_traps trap_cleanup_files
+
+  local program version author
+  program="$(basename "$0")"
+  version="0.1.0"
+  author="Fletcher Nichol <fnichol@nichol.ca>"
+
+  local base_path log
+  # The root directory where the source code lives
+  base_path="$(dirname "$0")/.."
+  # The log file for the `calamares` installer
+  log="/home/liveuser/calamares.install.log"
+
+  # Parse CLI arguments and set local variables
+  parse_cli_args "$program" "$version" "$author" "$@"
+
+  need_cmd calamares
+  need_cmd cp
+  need_cmd dbus-launch
+  need_cmd id
+  need_cmd inxi
+  need_cmd pacman
+  need_cmd rm
+  need_cmd sed
+
+  verify_system "$program"
+  freshen_system
+  install_systemd_calamares_pkg
+  prep_calamares_config "$base_path"
+  launch_installer "$log"
+
+  section "Calamares installer finished with logs at: $log"
+}
+
+parse_cli_args() {
+  local program version author
+  program="$1"
+  shift
+  version="$1"
+  shift
+  author="$1"
+  shift
+
+  OPTIND=1
+  # Parse command line flags and options
+  while getopts ":hV-:" opt; do
+    case $opt in
+      h)
+        print_usage "$program" "$version" "$author"
+        exit 0
+        ;;
+      V)
+        print_version "$program" "$version"
+        exit 0
+        ;;
+      -)
+        # long_optarg="${OPTARG#*=}"
+        case "$OPTARG" in
+          help)
+            print_usage "$program" "$version" "$author"
+            exit 0
+            ;;
+          version)
+            print_version "$program" "$version" "true"
+            exit 0
+            ;;
+          '')
+            # "--" terminates argument processing
+            break
+            ;;
+          *)
+            print_usage "$program" "$version" "$author" >&2
+            die "invalid argument --$OPTARG"
+            ;;
+        esac
+        ;;
+      \?)
+        print_usage "$program" "$version" "$author" >&2
+        die "invalid option: -$OPTARG"
+        ;;
+    esac
+  done
+  shift "$((OPTIND - 1))"
+}
+
+verify_system() {
+  local program="$1"
+
+  if [[ ! -d /etc/calamares ]]; then
+    warn "$program must be run on a CachyOS live ISO"
+    die "Program run on non-live ISO system"
+  fi
+
+  if [[ "$(id -u)" -ne 0 ]]; then
+    warn "$program must be run as the root user, please re-run to try again"
+    die "Program run without root permissions"
+  fi
+}
+
+freshen_system() {
+  section "Freshening system"
+
+  info "Removing current keyrings"
+  rm -rf /etc/pacman.d/gnupg
+
+  info "Re-initializing keyrings"
+  pacman -Sy --noconfirm archlinux-keyring cachyos-keyring
+  pacman-key --init
+  pacman-key --populate archlinux cachyos
+
+  info "Syncing time with hardware clock"
+  timedatectl set-ntp true
+}
+
+install_systemd_calamares_pkg() {
+  local rm_calamares_pkgs=(
+    cachyos-calamares-qt6-next-grub
+    cachyos-calamares-qt6-next-refind
+    cachyos-calamares-qt6-next-limine
+  )
+  local calamares_pkg="cachyos-calamares-qt6-next-systemd"
+
+  section "Installing systemd-boot calamares package"
+
+  info "Refreshing package databases"
+  pacman -Sy --noconfirm
+
+  for pkg in "${rm_calamares_pkgs[@]}"; do
+    if pacman -Q "$pkg" >/dev/null 2>&1; then
+      info "Removing unneeded calamares package: $pkg"
+      pacman -R --noconfirm "$pkg"
+    fi
+  done
+
+  if ! pacman -Q "$calamares_pkg" >/dev/null 2>&1; then
+    info "Installing calamares package: $calamares_pkg"
+    pacman -Sy --noconfirm "$calamares_pkg"
+  fi
+}
+
+prep_calamares_config() {
+  local base_path="$1"
+
+  section "Preparing calamares configuration and settings overrides"
+
+  local modules_path="/etc/calamares/modules"
+
+  cp -v \
+    /usr/share/calamares/settings_online.conf \
+    /usr/share/calamares/settings.conf
+
+  info "Updating partition.conf"
+  sed -i \
+    -e 's|^\(initialPartitioningChoice\):.*$|\1: erase|' \
+    -e 's|^\(defaultFileSystemType\):.*$|\1:  "zfs"|' \
+    "$modules_path/partition.conf"
+
+  info "Overriding zfs.conf"
+  cp -v "$base_path/conf/zfs.conf" "$modules_path/zfs.conf"
+}
+
+launch_installer() {
+  local log="$1"
+
+  inxi -F >>"$log"
+
+  section "Launching calamares installer and logging to: $log"
+
+  dbus-launch calamares -D6 | tee -a "$log"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@" || exit 99
+fi
