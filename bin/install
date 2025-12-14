@@ -185,6 +185,7 @@ prep_calamares_config() {
   sed -i \
     -e 's|^\(initialPartitioningChoice\):.*$|\1: erase|' \
     -e 's|^\(defaultFileSystemType\):.*$|\1:  "zfs"|' \
+    -e 's|^\(availableFileSystemTypes\):.*$|\1: ["zfs"]|' \
     "$modules_path/partition.conf"
 
   info "Overriding zfs.conf"
