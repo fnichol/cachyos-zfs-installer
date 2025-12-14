@@ -32,7 +32,7 @@ main() {
   if [[ -n "${TRACE:-}" ]]; then set -xv; fi
 
   local program version author
-  program="$(basename "$0")"
+  program="cachyos-zfs-installer-run"
   version="0.1.0"
   author="Fletcher Nichol <fnichol@nichol.ca>"
 
