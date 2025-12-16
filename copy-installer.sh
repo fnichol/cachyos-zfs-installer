@@ -15,7 +15,8 @@ print_usage() {
 
 	FLAGS:
 	    -h, --help      Prints this message
-	    -v, --verbose   Prints verbose output of the \`install.sh' program
+	    -u, --user      User to use when connecting remotely
+                            [default: liveuser]
 	    -V, --version   Prints version information
 
 	ARGS:
@@ -41,19 +42,20 @@ main() {
 
   # Parse CLI arguments and set local variables
   parse_cli_args "$program" "$version" "$author" "$@"
+  local user="$USER"
   local host="$HOST"
-  unset HOST
+  unset USER HOST
 
   need_cmd basename
   need_cmd scp
   need_cmd ssh
   need_cmd ssh-copy-id
 
-  authenticate "$host"
-  copy_installation_files "$host"
+  authenticate "$user" "$host"
+  copy_installation_files "$user" "$host"
 
-  section "CachyOS ZFS installer files copied to $host under ~/installer"
-  info "Run installer on live ISO directlywith: 'cd installer; sudo -E ./bin/install'"
+  section "CachyOS ZFS installer files copied to $user@$host under ~/installer"
+  info "Run installer on live ISO directly with: 'cd installer; sudo -E ./bin/install'"
 }
 
 parse_cli_args() {
@@ -65,23 +67,36 @@ parse_cli_args() {
   author="$1"
   shift
 
+  USER="liveuser"
+
   OPTIND=1
   # Parse command line flags and options
-  while getopts ":hV-:" opt; do
+  while getopts ":hu:V-:" opt; do
     case $opt in
       h)
         print_usage "$program" "$version" "$author"
         exit 0
+        ;;
+      u)
+        USER="$OPTARG"
         ;;
       V)
         print_version "$program" "$version"
         exit 0
         ;;
       -)
+        long_optarg="${OPTARG#*=}"
         case "$OPTARG" in
           help)
             print_usage "$program" "$version" "$author"
             exit 0
+            ;;
+          user=?*)
+            USER="$long_optarg"
+            ;;
+          user*)
+            print_usage "$program" "$version" "$author" >&2
+            die "missing required argument for --$OPTARG option"
             ;;
           '')
             # "--" terminates argument processing
@@ -111,25 +126,27 @@ parse_cli_args() {
 }
 
 authenticate() {
-  local host="$1"
+  local user="$1"
+  local host="$2"
 
-  section "Authenticating 'liveuser@$host'"
+  section "Authenticating '$user@$host'"
   ssh-copy-id \
     -f \
     -o UserKnownHostsFile=/dev/null \
     -o StrictHostKeyChecking=no \
-    "liveuser@$host"
+    "$user@$host"
 }
 
 copy_installation_files() {
-  local host="$1"
+  local user="$1"
+  local host="$2"
 
   section "Uploading installation files"
   ssh \
     -o UserKnownHostsFile=/dev/null \
     -o StrictHostKeyChecking=no \
     -t \
-    "liveuser@$host" \
+    "$user@$host" \
     mkdir installer
   scp \
     -o UserKnownHostsFile=/dev/null \
@@ -139,7 +156,7 @@ copy_installation_files() {
     ./conf \
     ./lib \
     ./vendor \
-    "liveuser@$host:installer"
+    "$user@$host:installer"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
