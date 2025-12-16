@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Cleaning up old ZFS boot environments...
+When = PostTransaction
+Exec = /usr/local/bin/pacman-zfs-post

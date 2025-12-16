@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Post-transaction hook: Clean up old ZFS boot environments
+
+set -euo pipefail
+
+# Determine script directory and source library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="${SCRIPT_DIR}/../lib"
+
+# For installed location
+if [[ -f "/usr/local/lib/pacman-zfs-common.sh" ]]; then
+  # shellcheck source=lib/pacman-zfs-common.sh
+  . "/usr/local/lib/pacman-zfs-common.sh"
+elif [[ -f "${LIB_DIR}/pacman-zfs-common.sh" ]]; then
+  # shellcheck source=lib/pacman-zfs-common.sh
+  . "${LIB_DIR}/pacman-zfs-common.sh"
+else
+  echo "ERROR: Cannot find pacman-zfs-common.sh library" >&2
+  exit 1
+fi
+
+# Load configuration
+load_config
+
+# List all boot environment datasets, sorted by creation time (oldest first)
+all_boot_envs=$(
+  zfs list \
+    -r \
+    -H \
+    -o name \
+    -s creation \
+    -t filesystem \
+    "${ZFS_ROOT_POOL}" 2>/dev/null \
+    | grep "/be-" \
+    || true
+)
+
+# Count total number of boot environments
+if [[ -z "$all_boot_envs" ]]; then
+  boot_envs_count=0
+else
+  boot_envs_count=$(echo "$all_boot_envs" | wc -l)
+fi
+
+if [[ "$boot_envs_count" -eq 0 ]]; then
+  echo "No boot environments found, skipping cleanup"
+  exit 0
+fi
+
+echo "Found $boot_envs_count boot environments (retention: $RETENTION_COUNT)"
+
+# Calculate how many boot environments to delete
+to_delete=$((boot_envs_count - RETENTION_COUNT))
+boot_envs_deleted=0
+
+if [[ "$to_delete" -gt 0 ]]; then
+  echo "Cleaning up $to_delete old boot environment(s)..."
+
+  # Delete oldest boot environments
+  echo "$all_boot_envs" | head -n "$to_delete" | while read -r boot_env; do
+    echo "Removing old boot environment: $boot_env"
+    if zfs destroy -r "$boot_env" 2>/dev/null; then
+      boot_envs_deleted=$((boot_envs_deleted + 1))
+    else
+      echo "Warning: Failed to destroy $boot_env" >&2
+    fi
+  done
+
+  # Check if any were actually deleted (approximate check)
+  remaining_list=$(
+    zfs list \
+      -r \
+      -H \
+      -o name \
+      -t filesystem \
+      "${ZFS_ROOT_POOL}" 2>/dev/null \
+      | grep "/be-" \
+      || true
+  )
+
+  if [[ -z "$remaining_list" ]]; then
+    remaining=0
+  else
+    remaining=$(echo "$remaining_list" | wc -l)
+  fi
+
+  if [[ "$remaining" -lt "$boot_envs_count" ]]; then
+    boot_envs_deleted=$((boot_envs_count - remaining))
+  fi
+else
+  echo "Within retention limit, no cleanup needed"
+fi
+
+# Regenerate ZFSBootMenu if boot environments were deleted
+if [[ "$boot_envs_deleted" -gt 0 ]]; then
+  if command -v generate-zbm >/dev/null 2>&1; then
+    echo "Regenerating ZFSBootMenu..."
+    if generate-zbm; then
+      echo "ZFSBootMenu regenerated successfully"
+    else
+      echo "Warning: Failed to regenerate ZFSBootMenu" >&2
+    fi
+  else
+    echo "Note: generate-zbm not found, skipping ZFSBootMenu regeneration"
+  fi
+fi
+
+echo "Cleanup complete"
+exit 0

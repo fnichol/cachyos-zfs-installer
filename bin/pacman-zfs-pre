@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# Pre-transaction hook: Create ZFS boot environment before package changes
+
+set -euo pipefail
+
+# Determine script directory and source library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="${SCRIPT_DIR}/../lib"
+
+# For installed location
+if [[ -f "/usr/local/lib/pacman-zfs-common.sh" ]]; then
+  # shellcheck source=lib/pacman-zfs-common.sh
+  . "/usr/local/lib/pacman-zfs-common.sh"
+elif [[ -f "${LIB_DIR}/pacman-zfs-common.sh" ]]; then
+  # shellcheck source=lib/pacman-zfs-common.sh
+  . "${LIB_DIR}/pacman-zfs-common.sh"
+else
+  echo "ERROR: Cannot find pacman-zfs-common.sh library" >&2
+  exit 1
+fi
+
+# Load configuration
+load_config
+
+# Initialize arrays
+declare -a installs=()
+declare -a upgrades=()
+declare -a removes=()
+declare -a all_packages=()
+
+# Parse stdin for package operations
+# Format from pacman hook:
+#   Install: "package_name"
+#   Upgrade: "package_name old_version new_version"
+#   Remove: "package_name"
+while read -r line; do
+  # Count fields to determine operation type
+  field_count=$(echo "$line" | awk '{print NF}')
+
+  if [[ $field_count -eq 3 ]]; then
+    # Upgrade: package old_version new_version
+    pkg_name=$(echo "$line" | awk '{print $1}')
+    upgrades+=("$pkg_name")
+    all_packages+=("$pkg_name")
+  elif [[ $field_count -eq 1 ]]; then
+    # Install or Remove: just package name
+    pkg_name="$line"
+
+    # Check if package is currently installed to distinguish install from remove
+    if pacman -Q "$pkg_name" &>/dev/null; then
+      # Package exists, so this is a remove operation
+      removes+=("$pkg_name")
+    else
+      # Package doesn't exist, so this is an install operation
+      installs+=("$pkg_name")
+    fi
+    all_packages+=("$pkg_name")
+  fi
+done
+
+# Exit early if no packages to process
+if [[ ${#all_packages[@]} -eq 0 ]]; then
+  echo "No packages to process, skipping boot environment creation"
+  exit 0
+fi
+
+# Detect boot-critical packages
+is_boot_critical=false
+for pkg in "${all_packages[@]}"; do
+  if is_boot_critical_package "$pkg"; then
+    is_boot_critical=true
+    break
+  fi
+done
+
+# Determine boot environment type
+# Count operation types
+operation_count=0
+[[ ${#installs[@]} -gt 0 ]] && ((++operation_count))
+[[ ${#upgrades[@]} -gt 0 ]] && ((++operation_count))
+[[ ${#removes[@]} -gt 0 ]] && ((++operation_count))
+
+# Determine type
+if [[ "$is_boot_critical" == true ]]; then
+  be_type="kernel"
+elif [[ $operation_count -gt 1 ]]; then
+  be_type="mixed"
+elif [[ ${#upgrades[@]} -gt 0 ]]; then
+  be_type="upgrade"
+elif [[ ${#installs[@]} -gt 0 ]]; then
+  be_type="install"
+else
+  be_type="remove"
+fi
+
+# Generate description based on type
+case "$be_type" in
+  kernel)
+    # Find kernel-related packages
+    kernel_pkgs=()
+    for pkg in "${all_packages[@]}"; do
+      if [[ "$pkg" =~ ^(linux|zfs-|intel-ucode|amd-ucode) ]]; then
+        kernel_pkgs+=("$pkg")
+      fi
+    done
+
+    if [[ ${#kernel_pkgs[@]} -gt 0 ]]; then
+      be_description="Pre-upgrade Kernel: $(format_kernel_packages "${kernel_pkgs[@]}")"
+    else
+      be_description="Pre-upgrade Boot-critical packages"
+    fi
+    ;;
+  upgrade)
+    be_description="Pre-upgrade Packages: $(format_package_list "${upgrades[@]}")"
+    ;;
+  install)
+    be_description="Pre-install Packages: $(format_package_list "${installs[@]}")"
+    ;;
+  remove)
+    be_description="Pre-remove Packages: $(format_package_list "${removes[@]}")"
+    ;;
+  mixed)
+    be_description="Pre-install/update/remove Packages: $(format_package_list "${all_packages[@]}")"
+    ;;
+esac
+
+# Get current boot environment
+current_be=$(get_current_be)
+if [[ -z "$current_be" ]]; then
+  abort_transaction "Cannot detect current boot environment"
+fi
+
+# Generate BE name
+timestamp=$(generate_timestamp)
+be_name="be-${timestamp}-pre-${be_type}"
+full_be_path="${ZFS_ROOT_POOL}/${be_name}"
+snapshot_name="${ZFS_ROOT_POOL}/${current_be}@${be_name}"
+
+echo "Creating boot environment: $be_name"
+echo "Type: $be_type"
+echo "Description: $be_description"
+
+# Create snapshot of current BE
+zfs snapshot "$snapshot_name" \
+  || abort_transaction "Failed to create snapshot: $snapshot_name"
+
+# Clone snapshot to new BE
+zfs clone "$snapshot_name" "$full_be_path" \
+  || abort_transaction "Failed to clone snapshot to: $full_be_path"
+
+# Set ZFS properties
+running_kernel=$(get_running_kernel)
+
+zfs set canmount=noauto "$full_be_path" \
+  || abort_transaction "Failed to set canmount property"
+
+zfs set mountpoint=/ "$full_be_path" \
+  || abort_transaction "Failed to set mountpoint property"
+
+zfs set org.zfsbootmenu:description="$be_description" "$full_be_path" \
+  || abort_transaction "Failed to set description property"
+
+zfs set org.zfsbootmenu:kernel="$running_kernel" "$full_be_path" \
+  || abort_transaction "Failed to set kernel property"
+
+echo "Successfully created boot environment: $be_name"
+exit 0

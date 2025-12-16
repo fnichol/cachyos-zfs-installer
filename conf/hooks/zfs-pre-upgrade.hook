@@ -1,0 +1,12 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Creating ZFS boot environment before package changes...
+When = PreTransaction
+Exec = /usr/local/bin/pacman-zfs-pre
+NeedsTargets
