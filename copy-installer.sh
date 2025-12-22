@@ -153,8 +153,7 @@ copy_installation_files() {
     -o StrictHostKeyChecking=no \
     -r \
     ./bin \
-    ./conf \
-    ./lib \
+    ./src \
     ./vendor \
     "$user@$host:installer"
 }

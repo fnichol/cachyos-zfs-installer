@@ -105,22 +105,32 @@ case "$be_type" in
     done
 
     if [[ ${#kernel_pkgs[@]} -gt 0 ]]; then
-      be_description="Pre-upgrade Kernel: $(format_kernel_packages "${kernel_pkgs[@]}")"
+      be_description="Pre-upgrade Kernel: $(
+        format_kernel_packages "${kernel_pkgs[@]}"
+      )"
     else
       be_description="Pre-upgrade Boot-critical packages"
     fi
     ;;
   upgrade)
-    be_description="Pre-upgrade Packages: $(format_package_list "${upgrades[@]}")"
+    be_description="Pre-upgrade Packages: $(
+      format_package_list "${upgrades[@]}"
+    )"
     ;;
   install)
-    be_description="Pre-install Packages: $(format_package_list "${installs[@]}")"
+    be_description="Pre-install Packages: $(
+      format_package_list "${installs[@]}"
+    )"
     ;;
   remove)
-    be_description="Pre-remove Packages: $(format_package_list "${removes[@]}")"
+    be_description="Pre-remove Packages: $(
+      format_package_list "${removes[@]}"
+    )"
     ;;
   mixed)
-    be_description="Pre-install/update/remove Packages: $(format_package_list "${all_packages[@]}")"
+    be_description="Pre-install/update/remove Packages: $(
+      format_package_list "${all_packages[@]}"
+    )"
     ;;
 esac
 
@@ -160,8 +170,11 @@ zfs set mountpoint=/ "$full_be_path" \
 zfs set org.zfsbootmenu:description="$be_description" "$full_be_path" \
   || abort_transaction "Failed to set description property"
 
-zfs set org.zfsbootmenu:kernel="$running_kernel" "$full_be_path" \
-  || abort_transaction "Failed to set kernel property"
+zfs set org.zfsbootmenu:kernel_version="$running_kernel" "$full_be_path" \
+  || abort_transaction "Failed to set kernel_version property"
+
+zfs set "org.zfsbootmenu:commandline=rw" "$full_be_path" \
+  || abort_transaction "Failed to set commandline property"
 
 echo "Successfully created boot environment: $be_name"
 exit 0

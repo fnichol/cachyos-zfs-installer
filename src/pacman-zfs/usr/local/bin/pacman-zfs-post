@@ -9,10 +9,10 @@ LIB_DIR="${SCRIPT_DIR}/../lib"
 
 # For installed location
 if [[ -f "/usr/local/lib/pacman-zfs-common.sh" ]]; then
-  # shellcheck source=lib/pacman-zfs-common.sh
+  # shellcheck source=src/pacman-zfs-common/usr/local/lib/pacman-zfs-common.sh
   . "/usr/local/lib/pacman-zfs-common.sh"
 elif [[ -f "${LIB_DIR}/pacman-zfs-common.sh" ]]; then
-  # shellcheck source=lib/pacman-zfs-common.sh
+  # shellcheck source=src/pacman-zfs-common/usr/local/lib/pacman-zfs-common.sh
   . "${LIB_DIR}/pacman-zfs-common.sh"
 else
   echo "ERROR: Cannot find pacman-zfs-common.sh library" >&2
@@ -92,18 +92,57 @@ else
 fi
 
 # Regenerate ZFSBootMenu if boot environments were deleted
-if [[ "$boot_envs_deleted" -gt 0 ]]; then
+if [[ "$boot_envs_deleted" -gt 0 ]] || [[ "${ALWAYS_REGENERATE:-false}" == "true" ]]; then
   if command -v generate-zbm >/dev/null 2>&1; then
     echo "Regenerating ZFSBootMenu..."
     if generate-zbm; then
       echo "ZFSBootMenu regenerated successfully"
     else
-      echo "Warning: Failed to regenerate ZFSBootMenu" >&2
+      echo "ERROR: Failed to regenerate ZFSBootMenu" >&2
+      exit 1
     fi
   else
     echo "Note: generate-zbm not found, skipping ZFSBootMenu regeneration"
+    exit 0
   fi
 fi
+
+echo "Verifying ZFSBootMenu installation..."
+
+# Verify unified EFI image created
+if [[ ! -f "/boot/efi/EFI/ZFSBootMenu/vmlinuz-linux-cachyos.EFI" ]]; then
+  echo "ERROR: ZFSBootMenu unified EFI image not found!" >&2
+  echo "Expected: /boot/efi/EFI/ZFSBootMenu/vmlinuz-linux-cachyos.EFI" >&2
+  echo "This indicates generate-zbm failed or is misconfigured" >&2
+  exit 1
+fi
+
+# Verify kernels are in correct location
+if [[ ! -f "/boot/vmlinuz-linux-cachyos" ]]; then
+  echo "ERROR: Kernel not found in /boot (ZFS)" >&2
+  echo "Expected: /boot/vmlinuz-linux-cachyos" >&2
+  echo "Check that kernels are being installed to ZFS /boot, not ESP" >&2
+  exit 1
+fi
+
+# Warn about stray kernels on ESP
+stray_files=""
+if [[ -f "/boot/efi/vmlinuz-linux-cachyos" ]]; then
+  stray_files="$stray_files\n  /boot/efi/vmlinuz-linux-cachyos"
+fi
+if [[ -f "/boot/efi/initramfs-linux-cachyos.img" ]]; then
+  stray_files="$stray_files\n  /boot/efi/initramfs-linux-cachyos.img"
+fi
+
+if [[ -n "$stray_files" ]]; then
+  echo "WARNING: Found kernel or initramfs files in /boot/efi (ESP)" >&2
+  echo "These should be in /boot (ZFS), not on the ESP:" >&2
+  echo -e "$stray_files" >&2
+  echo "This may indicate configuration drift" >&2
+fi
+
+echo "✓ ZFSBootMenu unified EFI image verified"
+echo "✓ Kernels correctly located in ZFS /boot"
 
 echo "Cleanup complete"
 exit 0

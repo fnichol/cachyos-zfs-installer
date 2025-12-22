@@ -1,0 +1,25 @@
+---
+# Configuration for ZFSBootMenu unified EFI images
+
+Global:
+  ManageImages: true
+  BootMountPoint: /boot/efi
+
+Components:
+  # Don't create separate kernel/initramfs files
+  Enabled: false
+
+EFI:
+  # Create unified EFI images
+  Enabled: true
+  ImageDir: /boot/efi/EFI/ZFSBootMenu
+  # Disable versioning for static filename (keeps one -backup.EFI automatically)
+  # See: https://docs.zfsbootmenu.org/en/v2.3.x/general/uefi-booting.html
+  Versions: false
+
+Kernel:
+  # Kernel command line parameters
+  # - ip=::::::dhcp: Configure network via DHCP (mkinitcpio format, auto-detect
+  # interface)
+  CommandLine:
+    "quiet loglevel=3 zswap.enabled=0 nowatchdog ip=::::::dhcp"

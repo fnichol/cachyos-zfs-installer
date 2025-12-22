@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 print_usage() {
   local program="$1"
@@ -23,7 +24,6 @@ print_usage() {
 }
 
 main() {
-  set -euo pipefail
   if [[ -n "${DEBUG:-}" ]]; then set -x; fi
   if [[ -n "${TRACE:-}" ]]; then set -xv; fi
 
@@ -57,7 +57,7 @@ main() {
 
   verify_system "$program"
   freshen_system
-  install_systemd_calamares_pkg
+  install_calamares_pkgs
   prep_calamares_config "$base_path"
   launch_installer "$log"
 
@@ -144,15 +144,19 @@ freshen_system() {
   timedatectl set-ntp true
 }
 
-install_systemd_calamares_pkg() {
+install_calamares_pkgs() {
   local rm_calamares_pkgs=(
     cachyos-calamares-qt6-next-grub
     cachyos-calamares-qt6-next-refind
     cachyos-calamares-qt6-next-limine
   )
   local calamares_pkg="cachyos-calamares-qt6-next-systemd"
+  local python_deps=(
+    python-pyqt6
+    kdialog
+  )
 
-  section "Installing systemd-boot calamares package"
+  section "Installing calamares package"
 
   info "Refreshing package databases"
   pacman -Sy --noconfirm
@@ -168,6 +172,14 @@ install_systemd_calamares_pkg() {
     info "Installing calamares package: $calamares_pkg"
     pacman -Sy --noconfirm "$calamares_pkg"
   fi
+
+  info "Installing Python dependencies for custom modules"
+  for pkg in "${python_deps[@]}"; do
+    if ! pacman -Q "$pkg" >/dev/null 2>&1; then
+      info "Installing Python package: $pkg"
+      pacman -S --noconfirm "$pkg"
+    fi
+  done
 }
 
 prep_calamares_config() {
@@ -180,16 +192,114 @@ prep_calamares_config() {
   cp -v \
     /usr/share/calamares/settings_online.conf \
     /usr/share/calamares/settings.conf
+  update_settings_conf /usr/share/calamares/settings.conf
 
-  info "Updating partition.conf"
+  info "Updating partition.conf for ESP at /boot/efi"
   sed -i \
     -e 's|^\(initialPartitioningChoice\):.*$|\1: erase|' \
     -e 's|^\(defaultFileSystemType\):.*$|\1:  "zfs"|' \
     -e 's|^\(availableFileSystemTypes\):.*$|\1: ["zfs"]|' \
+    -e 's|^\(efiSystemPartitionSize\):.*$|\1: 1GiB|' \
+    -e 's|^\(efiSystemPartition\):.*$|\1: /boot/efi|' \
     "$modules_path/partition.conf"
 
-  info "Overriding zfs.conf"
-  cp -v "$base_path/conf/zfs.conf" "$modules_path/zfs.conf"
+  info "Removing \`sdboot-manage gen\` from shellprocess_enable_sdboot.conf"
+  sed -i \
+    -e '/"sdboot-manage gen"$/,+1d' \
+    "$modules_path/shellprocess_enable_sdboot.conf"
+
+  find "$base_path/src/calamares/etc/calamares/scripts" -type f -exec \
+    install --verbose -m 755 -D {} /etc/calamares/scripts/ \;
+  find "$base_path/src/calamares/etc/calamares/modules" -type f -exec \
+    install --verbose -m 644 -D {} /etc/calamares/modules/ \;
+
+  info "Installing Python modules"
+  if [[ -d "$base_path/src/calamares/modules" ]]; then
+    mkdir -pv /usr/lib/calamares/modules
+    cp -rv "$base_path/src/calamares/modules/"* /usr/lib/calamares/modules/
+  fi
+
+  info "Copying pacman-zfs"
+  cp -rv "$base_path/src/pacman-zfs" /tmp
+
+  info "Configuring bootloader module for ZFSBootMenu"
+  # Create a custom bootloader configuration that does nothing (We handle
+  # bootloader setup in post-install)
+  cat >"$modules_path/bootloader.conf" <<-'EOF'
+	# Bootloader configuration
+	#
+	# ZFSBootMenu is configured post-install, so this module is
+	# essentially a no-op
+	
+	efiBootLoader: "none"
+	EOF
+
+  info "Calamares configuration prepared"
+}
+
+update_settings_conf() {
+  local file="$1"
+
+  info "Updating $file"
+  sed -i \
+    -e '
+/^  config:   shellprocess_enable_ufw\.conf$/a\
+\
+- id:       zfs_keyfile_passphrase\
+  module:   zfs_keyfile_passphrase\
+  config:   zfs_keyfile_passphrase.conf\
+\
+- id:       copy_zfs_scripts\
+  module:   shellprocess\
+  config:   shellprocess_copy_zfs_scripts.conf\
+\
+- id:       configure_mkinitcpio\
+  module:   shellprocess\
+  config:   shellprocess_configure_mkinitcpio.conf\
+\
+- id:       configure_zfsbootmenu\
+  module:   shellprocess\
+  config:   shellprocess_configure_zfsbootmenu.conf\
+\
+- id:       configure_zfs_encryption\
+  module:   shellprocess\
+  config:   shellprocess_configure_zfs_encryption.conf\
+\
+- id:       create_baseline_boot_env\
+  module:   shellprocess\
+  config:   shellprocess_create_baseline_boot_env.conf\
+\
+- id:       install_pacman_zfs\
+  module:   shellprocess\
+  config:   shellprocess_install_pacman_zfs.conf\
+\
+- id:       setup_user_home_zfs\
+  module:   shellprocess\
+  config:   shellprocess_setup_user_home_zfs.conf\
+\
+- id:       cleanup\
+  module:   shellprocess\
+  config:   shellprocess_cleanup.conf
+' \
+    -e '
+/^  - zfs$/a\
+  - zfs_keyfile_passphrase
+' \
+    -e '
+/^  - shellprocess@enable_ufw$/i\
+  - shellprocess@copy_zfs_scripts\
+  - shellprocess@setup_user_home_zfs\
+  - shellprocess@configure_zfsbootmenu\
+  - shellprocess@configure_zfs_encryption\
+  - shellprocess@configure_mkinitcpio\
+  - shellprocess@create_baseline_boot_env\
+  - shellprocess@install_pacman_zfs
+' \
+    -e '
+/^  - umount$/i\
+  - shellprocess@cleanup
+' \
+    "$file"
 }
 
 launch_installer() {
