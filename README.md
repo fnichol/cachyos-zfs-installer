@@ -18,6 +18,10 @@ environments.
 - [Architecture](#architecture)
   - [Components](#components)
   - [Boot Flow](#boot-flow)
+- [ZFS Dataset Layout](#zfs-dataset-layout)
+  - [Pool Configuration](#pool-configuration)
+  - [Dataset Hierarchy](#dataset-hierarchy)
+  - [Dataset Properties](#dataset-properties)
 - [Approach](#approach)
 - [Usage](#usage)
   - [Quick Start](#quick-start)
@@ -144,6 +148,103 @@ Scripts that run in the target system during installation:
 6. **zfs hook** in initramfs reads keyfile from `/etc/zfs/keys/zroot.key`,
    unlocks datasets
 7. **Root filesystem** mounts read-write, system boots normally
+
+## ZFS Dataset Layout
+
+The installer creates a structured dataset hierarchy that separates boot
+environments from persistent data. This separation ensures that rolling back to
+a previous boot environment preserves user data, logs, and container state.
+
+### Pool Configuration
+
+The pool `zroot` is created with these options:
+
+- `ashift=12` - 4KB sector alignment (optimal for modern drives)
+- `autotrim=on` - Automatic TRIM for SSDs
+- `acltype=posixacl` - POSIX ACL support for Linux permissions
+- `atime=off` - Disable access time updates (performance optimization)
+- `relatime=off` - Disable relative access time updates
+- `xattr=sa` - Store extended attributes in system attributes (performance)
+- `normalization=formD` - Unicode normalization for consistent filenames
+- `compression=lz4` - Default compression for all datasets (fast, effective)
+
+### Dataset Hierarchy
+
+**Boot Environment Datasets** (included in snapshots, rolled back together):
+
+```
+zroot/ROOT                      (mountpoint=none, canmount=off)
+├── default                     (mountpoint=/, canmount=noauto) - Active system
+└── baseline                    (mountpoint=/, canmount=noauto) - Factory snapshot
+```
+
+Additional boot environments appear here automatically via pacman hooks, named
+with timestamp prefixes (e.g., `be-2024-12-22-123456`).
+
+**Persistent Data Datasets** (excluded from boot environment snapshots):
+
+```
+zroot/data                      (mountpoint=none, canmount=off)
+├── home                        (mountpoint=/home)
+│   ├── root                    (mountpoint=/root)
+│   └── <username>              (mountpoint=/home/<username>) - Created per user
+├── opt                         (mountpoint=/opt)
+├── srv                         (mountpoint=/srv)
+└── var
+    ├── lib
+    │   ├── containers          (mountpoint=/var/lib/containers) - Podman
+    │   ├── docker              (mountpoint=/var/lib/docker) - Docker
+    │   ├── libvirt             (mountpoint=/var/lib/libvirt) - VMs
+    │   └── lxc                 (mountpoint=/var/lib/lxc) - Containers
+    ├── log                     (mountpoint=/var/log)
+    ├── spool                   (mountpoint=/var/spool)
+    └── tmp                     (mountpoint=/var/tmp)
+```
+
+**Encryption Support Datasets** (created when encryption is enabled):
+
+```
+zroot/keystore                  (mountpoint=/etc/zfs/keys) - Encryption keyfiles
+```
+
+**Virtual Machine Datasets**:
+
+```
+zroot/zvols                     (mountpoint=none, canmount=off) - ZVOLs for VMs
+```
+
+### Dataset Properties
+
+**Separation of Concerns**
+
+Datasets under `zroot/ROOT/` are included in boot environments. Changes to the
+operating system, installed packages, and system configuration live here. When
+you roll back to a previous boot environment, these changes revert.
+
+Datasets under `zroot/data/` persist across boot environments. User files,
+application data, logs, and container images remain unchanged when you switch
+boot environments. This separation prevents data loss during system rollbacks.
+
+**Compression**
+
+All datasets inherit `compression=lz4` by default. LZ4 provides substantial
+space savings (typically 20-40% for text and logs, less for media files) with
+negligible CPU overhead. Users can change compression on delegated datasets:
+
+```bash
+# Use stronger compression (slower writes, better ratio)
+zfs set compression=zstd zroot/data/home/$(whoami)
+
+# Disable compression (for pre-compressed data like media files)
+zfs set compression=off zroot/data/home/$(whoami)/media
+```
+
+**Automatic Snapshot Scope**
+
+The pacman pre-upgrade hook snapshots `zroot/ROOT/default` only, creating a new
+boot environment. Persistent data under `zroot/data/` is not snapshotted
+automatically. Users manage their own home directory snapshots using delegated
+permissions.
 
 ## Approach
 
