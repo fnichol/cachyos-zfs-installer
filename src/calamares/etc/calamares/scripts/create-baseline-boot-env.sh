@@ -33,7 +33,8 @@ main() {
   zfs set \
     org.zfsbootmenu:description="Factory baseline install" \
     "$baseline_boot_env"
-  zfs set org.zfsbootmenu:commandline="rw zfs=$baseline_boot_env" \
+  # Expand parent dataset commandline values
+  zfs set "org.zfsbootmenu:commandline=%{parent}" \
     "$baseline_boot_env"
 
   echo "✓ Created baseline boot environment: $baseline_boot_env"

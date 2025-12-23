@@ -173,7 +173,8 @@ zfs set org.zfsbootmenu:description="$be_description" "$full_be_path" \
 zfs set org.zfsbootmenu:kernel_version="$running_kernel" "$full_be_path" \
   || abort_transaction "Failed to set kernel_version property"
 
-zfs set "org.zfsbootmenu:commandline=rw" "$full_be_path" \
+# Expand parent dataset commandline values
+zfs set "org.zfsbootmenu:commandline=%{parent}" "$full_be_path" \
   || abort_transaction "Failed to set commandline property"
 
 echo "Successfully created boot environment: $be_name"

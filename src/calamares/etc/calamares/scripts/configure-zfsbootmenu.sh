@@ -46,7 +46,10 @@ set_boot_parameters() {
   # Set kernel command line parameters for ZFSBootMenu
   # - `rw`: Tell zfs hook to import pool read-write (not readonly)
   local cmdline="rw"
-  zfs set "org.zfsbootmenu:commandline=$cmdline" "$boot_env"
+  zfs set "org.zfsbootmenu:commandline=$cmdline" "$boot_root_dataset"
+
+  # Expand parent dataset commandline values
+  zfs set "org.zfsbootmenu:commandline=%{parent}" "$boot_env"
 
   zfs set "org.zfsbootmenu:rootprefix=zfs=" "$boot_root_dataset"
 
