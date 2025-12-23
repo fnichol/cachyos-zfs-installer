@@ -39,6 +39,12 @@ Follow the prompts to install, reboot, and you're done.
   - [Installation Process](#installation-process)
   - [Post-Installation](#post-installation)
 - [Boot Environments](#boot-environments)
+- [Customizing Kernel Parameters](#customizing-kernel-parameters)
+  - [How It Works](#how-it-works)
+  - [Adding Global Parameters](#adding-global-parameters)
+  - [Adding Parameters to Specific Boot Environments](#adding-parameters-to-specific-boot-environments)
+  - [Verifying Current Parameters](#verifying-current-parameters)
+  - [Common Parameters](#common-parameters)
 - [User Home Directories](#user-home-directories)
 - [Prior Art and References](#prior-art-and-references)
 - [Code of Conduct](#code-of-conduct)
@@ -387,6 +393,108 @@ Configure retention in `/etc/pacman-zfs-hooks.conf`:
 # Keep 5 boot environments instead of 24
 RETENTION_COUNT=5
 ```
+
+## Customizing Kernel Parameters
+
+ZFSBootMenu reads kernel command-line parameters from the
+`org.zfsbootmenu:commandline` ZFS property on each boot environment. The
+installer configures this property to inherit from a parent dataset, making it
+easy to set global parameters that apply to all boot environments or customize
+individual environments.
+
+### How It Works
+
+The installer sets up a two-level hierarchy:
+
+1. **Parent dataset** (`zroot/ROOT`) contains base kernel parameters
+2. **Boot environments** (`zroot/ROOT/default`, `zroot/ROOT/baseline`, etc.)
+   inherit these parameters using `%{parent}` expansion
+
+At install time, `zroot/ROOT` has `org.zfsbootmenu:commandline=rw`, and each
+boot environment has `org.zfsbootmenu:commandline=%{parent}`. When ZFSBootMenu
+boots an environment, it expands `%{parent}` to the value from `zroot/ROOT`,
+passing `rw` to the kernel.
+
+### Adding Global Parameters
+
+To add kernel parameters that apply to all boot environments, set them on the
+parent dataset:
+
+```bash
+# Get current value
+zfs get org.zfsbootmenu:commandline zroot/ROOT
+
+# Add a new parameter (preserving existing ones)
+sudo zfs set org.zfsbootmenu:commandline="rw mem_sleep_default=deep" zroot/ROOT
+```
+
+**Example: Fix Dell XPS sleep battery drain**
+
+Older Dell XPS laptops drain battery during sleep without the
+`mem_sleep_default=deep` kernel parameter. Add it globally:
+
+```bash
+# Add deep sleep parameter
+sudo zfs set org.zfsbootmenu:commandline="rw mem_sleep_default=deep" zroot/ROOT
+
+# Verify it will apply to all boot environments
+zfs get org.zfsbootmenu:commandline zroot/ROOT/default
+# Should show: %{parent}
+
+# Reboot to apply
+sudo reboot
+```
+
+After reboot, all boot environments will pass `rw mem_sleep_default=deep` to
+the kernel. The laptop will now enter deep sleep, preserving battery.
+
+### Adding Parameters to Specific Boot Environments
+
+To customize a single boot environment without affecting others, set the
+property directly on that environment:
+
+```bash
+# Override for one boot environment
+sudo zfs set org.zfsbootmenu:commandline="rw mem_sleep_default=deep debug" \
+  zroot/ROOT/default
+
+# Or append to parent values (if ZFSBootMenu version supports it)
+sudo zfs set org.zfsbootmenu:commandline="%{parent} debug" \
+  zroot/ROOT/default
+```
+
+The first approach replaces all parameters (including `%{parent}` expansion).
+The second appends to inherited values, useful for debugging one environment
+while keeping others unchanged.
+
+### Verifying Current Parameters
+
+Check what kernel parameters ZFSBootMenu will use:
+
+```bash
+# Check parent dataset value
+zfs get org.zfsbootmenu:commandline zroot/ROOT
+
+# Check boot environment value (may show %{parent})
+zfs get org.zfsbootmenu:commandline zroot/ROOT/default
+
+# See effective kernel command line after boot
+cat /proc/cmdline
+```
+
+### Common Parameters
+
+- `rw` - Mount root filesystem read-write (default)
+- `ro` - Mount root filesystem read-only (for recovery)
+- `mem_sleep_default=deep` - Force deep sleep (S3) instead of s2idle
+- `quiet` - Suppress boot messages
+- `loglevel=3` - Reduce kernel log verbosity
+- `systemd.unit=rescue.target` - Boot to rescue mode
+- `systemd.unit=emergency.target` - Boot to emergency shell
+
+Consult the [Linux kernel parameters
+documentation](https://www.kernel.org/doc/html/latest/admin-guide/kernel-parameters.html)
+for a complete list.
 
 ## User Home Directories
 
