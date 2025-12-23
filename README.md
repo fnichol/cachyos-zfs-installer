@@ -9,6 +9,17 @@ An installer that configures [CachyOS][cachyos] with an optionally encrypted ZFS
 root filesystem, [ZFSBootMenu][zfsbootmenu] bootloader, and automatic boot
 environments.
 
+## tl;dr
+
+Boot CachyOS live ISO and run:
+
+```sh
+curl -sSf https://fnichol.github.io/cachyos-zfs-installer/run.sh | sudo -E bash -s --
+```
+
+This configures Calamares for ZFS with ZFSBootMenu and launches the installer.
+Follow the prompts to install, reboot, and you're done.
+
 **Table of Contents**
 
 <!-- toc -->
