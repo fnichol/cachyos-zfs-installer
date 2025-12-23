@@ -27,6 +27,7 @@ main() {
   local dataset="$pool_name/data/home/$username"
 
   # Create ZFS dataset and assign temporary mount point
+  echo "Creating user ZFS dataset: $dataset"
   zfs create -o "mountpoint=$home_dir_tmp_mount" "$dataset" || return 1
 
   # Update permissions and ownership
@@ -34,6 +35,7 @@ main() {
   chmod 0750 "$root/$home_dir_tmp_mount"
 
   # Copy existing home directory content into dataset
+  echo "Copying user's existing home directory content to dataset"
   (
     cd "$root/$home_dir"
     tar cpf - . | tar xpf - -C "$root/$home_dir_tmp_mount"
@@ -48,10 +50,36 @@ main() {
   # Update mount point for dataset
   zfs set "mountpoint=$home_dir" "$dataset" || return 1
 
+  local user_uid user_gid user_comment
+  user_uid="$(grep -E "^$username:" "$root/etc/passwd" | awk -F: '{print $3}')"
+  user_gid="$(grep -E "^$username:" "$root/etc/passwd" | awk -F: '{print $4}')"
+  user_comment="$(
+    grep -E "^$username:" "$root/etc/passwd" | awk -F: '{print $5}'
+  )"
+
+  # Create a temporary user on the live ISO system so that a "local" user is
+  # present when delegating ZFS dataset permissions
+  echo "Creating temporary local user for ZFS permissions delegation: $username"
+  useradd \
+    --non-unique \
+    --no-create-home \
+    --uid "$user_uid" \
+    --gid "$user_gid" \
+    --comment "$user_comment" \
+    --shell /bin/bash \
+    "$username"
+
   # Delegate ZFS permissions (power user level)
+  echo "Delegating ZFS permissions of $dataset to: $username"
   zfs allow -u "$username" \
     compression,mountpoint,create,mount,snapshot,destroy,send,receive,hold,release \
     "$dataset" || return 1
+
+  # Delete the temporary user
+  echo "Deleting temporary user: $username"
+  userdel \
+    --force \
+    "$username" 2>/dev/null
 
   # Finally, clean up
   rmdir "$root/$home_dir_tmp_mount"
