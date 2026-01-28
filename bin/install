@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Note: Some of the basis of this script was from inspecting the Calamares
+# online install script on the CachyOS live ISO.
+#
+# See: https://github.com/CachyOS/CachyOS-Live-ISO/blob/master/archiso/airootfs/usr/local/bin/calamares-online.sh
+
 print_usage() {
   local program="$1"
   local version="$2"
