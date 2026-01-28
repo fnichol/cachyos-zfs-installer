@@ -192,7 +192,6 @@ prep_calamares_config() {
     -e 's|^\(initialPartitioningChoice\):.*$|\1: erase|' \
     -e 's|^\(defaultFileSystemType\):.*$|\1:  "zfs"|' \
     -e 's|^\(availableFileSystemTypes\):.*$|\1: ["zfs"]|' \
-    -e 's|^\(efiSystemPartitionSize\):.*$|\1: 1GiB|' \
     -e 's|^\(efiSystemPartition\):.*$|\1: /boot/efi|' \
     "$modules_path/partition.conf"
 
