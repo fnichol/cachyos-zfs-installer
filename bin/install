@@ -195,11 +195,6 @@ prep_calamares_config() {
     -e 's|^\(efiSystemPartition\):.*$|\1: /boot/efi|' \
     "$modules_path/partition.conf"
 
-  info "Removing \`sdboot-manage gen\` from shellprocess_enable_sdboot.conf"
-  sed -i \
-    -e '/"sdboot-manage gen"$/,+1d' \
-    "$modules_path/shellprocess_enable_sdboot.conf"
-
   find "$base_path/src/calamares/etc/calamares/scripts" -type f -exec \
     install --verbose -m 755 -D {} /etc/calamares/scripts/ \;
   find "$base_path/src/calamares/etc/calamares/modules" -type f -exec \
