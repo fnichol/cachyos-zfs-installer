@@ -145,12 +145,7 @@ freshen_system() {
 }
 
 install_calamares_pkgs() {
-  local rm_calamares_pkgs=(
-    cachyos-calamares-qt6-next-grub
-    cachyos-calamares-qt6-next-refind
-    cachyos-calamares-qt6-next-limine
-  )
-  local calamares_pkg="cachyos-calamares-qt6-next-systemd"
+  local calamares_pkg="cachyos-calamares-next"
   local python_deps=(
     python-pyqt6
     kdialog
@@ -160,13 +155,6 @@ install_calamares_pkgs() {
 
   info "Refreshing package databases"
   pacman -Sy --noconfirm
-
-  for pkg in "${rm_calamares_pkgs[@]}"; do
-    if pacman -Q "$pkg" >/dev/null 2>&1; then
-      info "Removing unneeded calamares package: $pkg"
-      pacman -R --noconfirm "$pkg"
-    fi
-  done
 
   if ! pacman -Q "$calamares_pkg" >/dev/null 2>&1; then
     info "Installing calamares package: $calamares_pkg"
