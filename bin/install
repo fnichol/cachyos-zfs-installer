@@ -195,10 +195,10 @@ prep_calamares_config() {
     -e 's|^\(efiSystemPartition\):.*$|\1: /boot/efi|' \
     "$modules_path/partition.conf"
 
-  info "Updating bootloader.conf to set temporary systemd-boot as bootloader"
+  info "Setting default bootloader to systemd-boot"
   sed -i \
-    -e 's|^\(efiBootLoader\):.*$|\1: "systemd-boot"|' \
-    "$modules_path/bootloader.conf"
+    -e 's|^\(default\):.*$|\1: systemd-boot|' \
+    "$modules_path/packagechooser_bootloader.conf"
 
   find "$base_path/src/calamares/etc/calamares/scripts" -type f -exec \
     install --verbose -m 755 -D {} /etc/calamares/scripts/ \;
