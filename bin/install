@@ -39,7 +39,7 @@ main() {
 
   local program version author
   program="$(basename "$0")"
-  version="0.1.0"
+  version="0.2.0"
   author="Fletcher Nichol <fnichol@nichol.ca>"
 
   local base_path log
