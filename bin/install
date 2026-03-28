@@ -198,6 +198,10 @@ prep_calamares_config() {
   info "Setting default bootloader to systemd-boot"
   sed -i \
     -e 's|^\(default\):.*$|\1: systemd-boot|' \
+    -e '/    - id: grub$/,/^$/d' \
+    -e '/    - id: refind$/,/^$/d' \
+    -e '/    - id: refind-ai$/,/^$/d' \
+    -e '/    - id: limine$/,/^$/d' \
     "$modules_path/packagechooser_bootloader.conf"
 
   find "$base_path/src/calamares/etc/calamares/scripts" -type f -exec \
