@@ -150,7 +150,7 @@ freshen_system() {
 }
 
 install_calamares_pkgs() {
-  local calamares_pkg="cachyos-calamares-next"
+  local calamares_pkg="cachyos-calamares"
   local python_deps=(
     python-pyqt6
     kdialog
