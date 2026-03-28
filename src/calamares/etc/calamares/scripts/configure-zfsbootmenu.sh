@@ -83,8 +83,13 @@ create_efi_boot_entry() {
   esp_dev=$(findmnt -n -o SOURCE /boot/efi)
 
   # Extract disk and partition number
-  local disk="${esp_dev%p[0-9]*}"
-  local part="${esp_dev##*p}"
+  if [[ "$esp_dev" =~ /dev/vd[a-z][0-9]* ]]; then
+    local disk="${esp_dev%[0-9]*}"
+    local part="${esp_dev##*/vd[a-z]}"
+  else
+    local disk="${esp_dev%p[0-9]*}"
+    local part="${esp_dev##*p}"
+  fi
 
   echo "ESP device: $esp_dev (disk: $disk, partition: $part)"
 
