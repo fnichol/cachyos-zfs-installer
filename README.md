@@ -14,7 +14,7 @@ environments.
 Boot CachyOS live ISO and run:
 
 ```sh
-curl -sSf https://raw.githubusercontent.com/Anonymo/cachyos-zfs-installer/fix/efibootmgr-sata-disk-parsing/docs/run.sh | sudo -E bash -s --
+curl -sSf https://anonymo.github.io/cachyos-zfs-installer/run.sh | sudo -E bash -s --
 ```
 
 This configures Calamares for ZFS with ZFSBootMenu and launches the installer.
@@ -301,7 +301,7 @@ implementation details.
 Boot CachyOS live ISO and run:
 
 ```sh
-curl -sSf https://raw.githubusercontent.com/Anonymo/cachyos-zfs-installer/fix/efibootmgr-sata-disk-parsing/docs/run.sh | sudo -E bash -s --
+curl -sSf https://anonymo.github.io/cachyos-zfs-installer/run.sh | sudo -E bash -s --
 ```
 
 This command downloads the installer, configures Calamares for ZFS with
