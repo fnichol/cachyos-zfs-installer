@@ -124,8 +124,6 @@ instead of ext4 and systemd-boot, and sets up the installation environment.
 
 Custom Calamares configuration that runs during installation:
 
-- **Python module** (`zfs_keyfile_passphrase`) prompts for ZFS encryption
-  passphrase with clear explanation, writing it securely to a temporary file
 - **Shell scripts** configure mkinitcpio, create encryption keyfiles, generate
   ZFSBootMenu images, set up boot environments, and install pacman hooks
 - **Module configuration** files define execution order and integration points

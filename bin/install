@@ -158,10 +158,6 @@ freshen_system() {
 
 install_calamares_pkgs() {
   local calamares_pkg="cachyos-calamares-next"
-  local python_deps=(
-    python-pyqt6
-    kdialog
-  )
 
   section "Installing calamares package"
 
@@ -172,14 +168,6 @@ install_calamares_pkgs() {
     info "Installing calamares package: $calamares_pkg"
     pacman -Sy --noconfirm "$calamares_pkg"
   fi
-
-  info "Installing Python dependencies for custom modules"
-  for pkg in "${python_deps[@]}"; do
-    if ! pacman -Q "$pkg" >/dev/null 2>&1; then
-      info "Installing Python package: $pkg"
-      pacman -S --noconfirm "$pkg"
-    fi
-  done
 }
 
 prep_calamares_config() {
