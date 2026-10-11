@@ -12,6 +12,7 @@ Before any package installation, upgrade, or removal, the system automatically:
    was running
 3. **Makes it bootable** - Adds it to ZFSBootMenu for easy recovery
 4. **Cleans up old BEs** - Keeps only the configured number of boot environments
+   and removes the snapshots they were cloned from
 5. **Updates boot menu** - Regenerates ZFSBootMenu when needed
 
 ## Why This Matters
@@ -75,6 +76,18 @@ ZFS_ROOT_POOL="zroot/ROOT"
 ```
 
 Current boot environment is auto-detected from the root mountpoint.
+
+## Retention and Cleanup
+
+- The oldest BEs beyond `RETENTION_COUNT` are destroyed along with their origin
+  snapshots.
+- The running BE and any BE with dependent clones are skipped (and logged).
+  Skipped BEs still count toward `RETENTION_COUNT`, so fewer than expected may
+  be removed until you boot a newer BE.
+- Every run also removes `@be-YYYYMMDD-HHMMSS-pre-*` snapshots that no longer
+  have clones. On systems that ran an older version of these hooks, the first
+  run can remove hundreds of snapshots and take noticeably longer.
+- User-created snapshots and `@baseline` are never touched.
 
 ## Usage
 
@@ -176,6 +189,13 @@ Adjust retention count:
 ```bash
 sudo nano /etc/pacman-zfs-hooks.conf
 # Change RETENTION_COUNT to desired value
+```
+
+### Disk usage keeps growing
+
+```bash
+# Snapshots with "-" in the CLONES column are orphaned
+zfs list -t snapshot -o name,clones,used -r zroot/ROOT
 ```
 
 ## References

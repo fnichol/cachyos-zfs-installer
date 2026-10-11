@@ -1,12 +1,14 @@
 SH_SOURCES ?= $(shell find . -type f -name '*.sh' -not -path './tmp/*' -and -not -path './vendor/*')
 SHELL_BIN ?= $(SHELL)
-SHUNIT2_VERSION := 2.1.7
+SHUNIT2_VERSION := 2.1.8
 CHECK_TOOLS += shellcheck shfmt
 
-test-shell: testtools dl-shunit2 ## Runs all shell code tests
+$(SH_TESTS): testtools dl-shunit2
+	@echo
 	@echo "--- $@"
-	for test in $(SH_TESTS); do \
-		echo; echo "Running: $$test"; $(SHELL_BIN) $$test; done
+	./$@
+
+test-shell: $(SH_TESTS) ## Runs all shell code tests
 .PHONY: test-shell
 
 check-shell: shellcheck shfmt ## Checks linting & styling rules for shell code

@@ -134,7 +134,8 @@ System-level hooks that run before and after package operations:
 
 - **Pre-hook** (`zfs-pre-upgrade.hook`) snapshots the current boot environment
   when kernel or ZFS packages will be updated
-- **Post-hook** (`zfs-post-cleanup.hook`) cleans old boot environments based on
+- **Post-hook** (`zfs-post-cleanup.hook`) cleans old boot environments and their
+  snapshots based on retention policy and regenerates ZFSBootMenu images
   retention policy and regenerates ZFSBootMenu images
 - **Common library** (`pacman-zfs-common.sh`) provides shared functionality for
   both hooks
@@ -392,6 +393,9 @@ Configure retention in `/etc/pacman-zfs-hooks.conf`:
 RETENTION_COUNT=5
 ```
 
+Note that snapshots backing removed boot environments are destroyed too, and the
+running boot environment is never removed.
+
 ## Customizing Kernel Parameters
 
 ZFSBootMenu reads kernel command-line parameters from the
@@ -443,8 +447,8 @@ zfs get org.zfsbootmenu:commandline zroot/ROOT/default
 sudo reboot
 ```
 
-After reboot, all boot environments will pass `rw mem_sleep_default=deep` to
-the kernel. The laptop will now enter deep sleep, preserving battery.
+After reboot, all boot environments will pass `rw mem_sleep_default=deep` to the
+kernel. The laptop will now enter deep sleep, preserving battery.
 
 ### Adding Parameters to Specific Boot Environments
 
@@ -490,8 +494,8 @@ cat /proc/cmdline
 - `systemd.unit=rescue.target` - Boot to rescue mode
 - `systemd.unit=emergency.target` - Boot to emergency shell
 
-Consult the [Linux kernel parameters
-documentation](https://www.kernel.org/doc/html/latest/admin-guide/kernel-parameters.html)
+Consult the
+[Linux kernel parameters documentation](https://www.kernel.org/doc/html/latest/admin-guide/kernel-parameters.html)
 for a complete list.
 
 ## User Home Directories

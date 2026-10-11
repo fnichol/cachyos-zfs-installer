@@ -9,10 +9,10 @@ LIB_DIR="${SCRIPT_DIR}/../lib"
 
 # For installed location
 if [[ -f "/usr/local/lib/pacman-zfs-common.sh" ]]; then
-  # shellcheck source=lib/pacman-zfs-common.sh
+  # shellcheck source=src/pacman-zfs/usr/local/lib/pacman-zfs-common.sh
   . "/usr/local/lib/pacman-zfs-common.sh"
 elif [[ -f "${LIB_DIR}/pacman-zfs-common.sh" ]]; then
-  # shellcheck source=lib/pacman-zfs-common.sh
+  # shellcheck source=src/pacman-zfs/usr/local/lib/pacman-zfs-common.sh
   . "${LIB_DIR}/pacman-zfs-common.sh"
 else
   echo "ERROR: Cannot find pacman-zfs-common.sh library" >&2
