@@ -199,6 +199,36 @@ prep_calamares_config() {
     -e '/    - id: limine$/,/^$/d' \
     "$modules_path/packagechooser_bootloader.conf"
 
+  # NOTE: This issue should be fixed upstream in the `cachyos-calamares-next`
+  # package.
+  #
+  # The Cosmic Desktop Environment is missing from the displaymanager module's
+  # desktop environment list, so no DE is detected and the greetd handler
+  # (greetd is a dependency of cosmic-greeter) fails on a `None` desktop
+  # environment
+  local dm_main="/usr/lib/calamares/modules/displaymanager/main.py"
+  if ! grep -q "/usr/bin/cosmic-session" "$dm_main"; then
+    info "Adding COSMIC to displaymanager desktop environment detection"
+    sed -i \
+      -e "/DesktopEnvironment('\/usr\/bin\/Hyprland', 'hyprland'),/a\\
+    DesktopEnvironment('/usr/bin/cosmic-session', 'cosmic')," \
+      "$dm_main"
+  fi
+
+  # NOTE: This issue is fixed upstream in CachyOS-Live-ISO (#114) for ISOs
+  # built after 2026-08-12.
+  #
+  # The `dmcheck` script links `greetd.service` as the display manager whenever
+  # greetd is installed, and greetd is a dependency of cosmic-greeter, so it
+  # replaces cosmic-greeter. Only link greetd when noctalia-greeter is installed.
+  local dmcheck
+  for dmcheck in /etc/calamares/scripts/dmcheck /usr/local/bin/dmcheck; do
+    if [[ -f "$dmcheck" ]] && grep -q "^package=greetd$" "$dmcheck"; then
+      info "Updating $dmcheck to not override cosmic-greeter with greetd"
+      sed -i -e 's|^package=greetd$|package=noctalia-greeter|' "$dmcheck"
+    fi
+  done
+
   find "$base_path/src/calamares/etc/calamares/scripts" -type f -exec \
     install --verbose -m 755 -D {} /etc/calamares/scripts/ \;
   find "$base_path/src/calamares/etc/calamares/modules" -type f -exec \
